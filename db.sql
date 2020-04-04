@@ -49,9 +49,9 @@ insert into Studies values (3, 'studies3');
 insert into Studies values (4, 'IT');
 
 insert into Enrollment values (1, 2, 1, CONVERT(varchar, '2019-10-10', 23));
-insert into Enrollment values (2, 1, 3, CONVERT(varchar, '2020-12-15', 23));
+insert into Enrollment values (2, 1, 4, CONVERT(varchar, '2020-12-15', 23));
 insert into Enrollment values (3, 3, 2, CONVERT(varchar, '2019-11-01', 23));
-insert into Enrollment values (3, 3, 4, CONVERT(varchar, '2017-11-01', 23));
+insert into Enrollment values (4, 3, 3, CONVERT(varchar, '2017-11-01', 23));
 
 insert into Student values ('s19999', 'name1', 'surname1', CONVERT(varchar, '1998-07-10', 23), 1);
 insert into Student values ('s18999', 'name2', 'surname2', CONVERT(varchar, '1999-10-05', 23), 2);
@@ -67,3 +67,12 @@ select * from Student;
 SELECT * FROM Studies WHERE Name='IT';
 
 select MAX(IdEnrollment) as IdEnrollment from Enrollment;
+
+SELECT * FROM Enrollment WHERE Semester = 1 AND IdStudy = (select s.IdStudy from Studies s where s.name = 'IT');
+select * from Enrollment;
+
+update Student Set IdEnrollment = 2 Where IdEnrollment = 
+	(select e.IdEnrollment from Enrollment e 
+	where e.IdStudy = 
+		(select s.IdStudy from Studies s where s.Name = 'IT')
+	and e.Semester = 1);

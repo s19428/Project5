@@ -69,17 +69,8 @@ namespace WebApplication1.Services
                 {
                     dr.Close();
                 }
-                //...
 
-                //4. ....
-
-                //x.. INSERT Student
-                /*
-                com.CommandText = "INSERT INTO Student(IndexNumber, FirstName, LastName) VALUES (@FirstName, @LastName, .....";
-                //...
-                com.Parameters.AddWithValue("FistName", request.FirstName);
-                //...
-                */
+                // INSERT Student.
                 com.CommandText = "insert into Student values (@studentIndexNumber, @studentName, @studentSurname, CONVERT(varchar, @studentBirthDate, 23), @studentStudies);";
                 com.Parameters.AddWithValue("studentIndexNumber", request.IndexNumber);
                 com.Parameters.AddWithValue("studentName", request.FirstName);
@@ -102,31 +93,106 @@ namespace WebApplication1.Services
             // 1. Check if Enrollment table contains provided Studies and Semester. Otherwise return 404(Not Found)
 
             using (var con = new SqlConnection(connectionString))
-            using (var com = new SqlCommand())
+            //using (var com = new SqlCommand())
             {
                 // 1.
-                com.CommandText = "SELECT * FROM Enrollment WHERE Semester = @semester AND IdStudy = (select s.IdStudy from Studies s where s.name = @studies)";
-                com.Parameters.AddWithValue("semester", semester);
-                com.Parameters.AddWithValue("studies", studies);
-
-                com.Connection = con;
+                string selectFromEnrollment = 
+                    "SELECT * FROM Enrollment WHERE Semester = @semester AND IdStudy = (select s.IdStudy from Studies s where s.name = @studies)";
 
                 con.Open();
-
                 var tran = con.BeginTransaction();
-                com.Transaction = tran;
 
-                // 1. execute first statement
-                var dr = com.ExecuteReader();
-                if (!dr.Read())
+                using (var com = new SqlCommand())
                 {
-                    dr.Close();
-                    tran.Rollback();
-                    throw new HttpException(404, "Enrollment with thease parameters not found");
-                }
-                int idStudies = (int)dr["IdStudy"];
-                dr.Close();
+                    com.Connection = con;
+                    com.Transaction = tran;
 
+                    com.CommandText = selectFromEnrollment;
+                    com.Parameters.AddWithValue("semester", semester);
+                    com.Parameters.AddWithValue("studies", studies);
+
+                    com.Transaction = tran;
+
+                    // 1. execute first statement
+                    var dr = com.ExecuteReader();
+                    if (!dr.Read())
+                    {
+                        dr.Close();
+                        tran.Rollback();
+                        throw new HttpException(404, "Enrollment with thease parameters not found");
+                    }
+                    dr.Close();
+                }
+
+                // 2.
+
+                int updatedSemester = semester + 1;
+                int newIdEnrollment = 1;
+
+                using (var com = new SqlCommand())
+                {
+                    com.Connection = con;
+                    com.Transaction = tran;
+
+                    com.CommandText = selectFromEnrollment;
+                    com.Parameters.AddWithValue("semester", updatedSemester);
+                    com.Parameters.AddWithValue("studies", studies);
+
+                    var dr = com.ExecuteReader();
+                    if (!dr.Read())
+                    {
+                        //If such record doesn’t exists we must add a new one.
+                        dr.Close();
+
+                        com.CommandText = "select MAX(IdEnrollment) as IdEnrollment from Enrollment";
+                        dr = com.ExecuteReader();
+                        if (dr.Read())
+                            newIdEnrollment = (int)dr["IdEnrollment"] + 1;
+                        dr.Close();
+
+
+
+                        com.CommandText = "SELECT * FROM Studies WHERE Name=@Name";
+                        com.Parameters.AddWithValue("Name", studies);
+                        dr = com.ExecuteReader();
+                        if (!dr.Read())
+                        {
+                            dr.Close();
+                            tran.Rollback();
+                            //ERROR - 404 - Studies does not exists
+                            throw new HttpException(404, "Studies does not exists");
+                        }
+                        int idStudies = (int)dr["IdStudy"];
+                        dr.Close();
+
+
+
+                        com.CommandText = "insert into Enrollment values (@IdEnrollment, @semster, @idStudies, CONVERT(varchar, '2019-10-10', 23));";
+                        com.Parameters.AddWithValue("IdEnrollment", newIdEnrollment);
+                        com.Parameters.AddWithValue("semster", updatedSemester);
+                        com.Parameters.AddWithValue("idStudies", idStudies);
+
+                        com.ExecuteNonQuery();
+                    }
+                    dr.Close();
+                }
+
+                using (var com = new SqlCommand())
+                {
+                    com.Connection = con;
+                    com.Transaction = tran;
+
+                    //To complete the process update IdEnrollment value for all promoted students.
+                    com.CommandText =
+                    "update Student Set IdEnrollment = @newIdEnrollment " +
+                    "Where IdEnrollment = (select e.IdEnrollment from Enrollment e where e.IdStudy = " +
+                    "(select s.IdStudy from Studies s where s.Name = @studies)and e.Semester = @semester);";
+                    com.Parameters.AddWithValue("newIdEnrollment", newIdEnrollment);
+                    com.Parameters.AddWithValue("studies", studies);
+                    com.Parameters.AddWithValue("semester", semester);
+
+                    com.ExecuteNonQuery();
+                }
 
                 tran.Commit(); //make all the changes in db visible to another users
 

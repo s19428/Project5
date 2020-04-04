@@ -44,7 +44,7 @@ namespace WebApplication1.Controllers
         }
     
         [HttpPost("promote")]
-        public IActionResult PromoteStudents()
+        public IActionResult PromoteStudents(PromoteStudentRequest request)
         {
             //Request - name of studies=IT, semester=1
 
@@ -56,8 +56,14 @@ namespace WebApplication1.Controllers
             //   If Enrollment does not exist -> add new one
 
             //Create stored procedure
-            _service.PromoteStudents(1, "IT");
-
+            try
+            {
+                _service.PromoteStudents(request.Semester, request.Studies);
+            }
+            catch (HttpException e)
+            {
+                return NotFound(e.ToString());
+            }
             return Ok();
         }
     }

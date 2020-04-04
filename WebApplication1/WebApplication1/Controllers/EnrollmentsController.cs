@@ -9,6 +9,7 @@ using WebApplication1.DTOs.Requests;
 using WebApplication1.DTOs.Responses;
 using WebApplication1.Models;
 using WebApplication1.Services;
+using System.Web;
 
 namespace WebApplication1.Controllers
 {
@@ -28,9 +29,17 @@ namespace WebApplication1.Controllers
         [HttpPost]
         public IActionResult EnrollStudent(EnrollStudentRequest request)
         {
-            _service.EnrollStudent(request);
-
-            var response = new EnrollStudentResponse();
+            try
+            {
+                _service.EnrollStudent(request);
+            }
+            catch (HttpException e)
+            {
+                return NotFound(e.ToString());
+            }
+            EnrollStudentResponse response = new EnrollStudentResponse();
+            response.Semester = "1";
+            response.LastName = request.LastName;
             return Ok(response);
         }
     

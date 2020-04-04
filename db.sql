@@ -62,3 +62,8 @@ insert into Student values ('s16999', 'name4', 'surname4', CONVERT(varchar, '199
 
 select * from studies where IdStudy = (select IdStudy from Enrollment where IdEnrollment = 3);
 
+select * from Student;
+
+SELECT * FROM Studies WHERE Name='IT';
+
+select MAX(IdEnrollment) as IdEnrollment from Enrollment;

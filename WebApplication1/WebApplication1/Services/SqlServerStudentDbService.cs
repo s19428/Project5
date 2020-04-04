@@ -10,6 +10,7 @@ namespace WebApplication1.Services
 {
     public class SqlServerStudentDbService : IStudentServiceDb
     {
+        private const string connectionString = @"Server=localhost\SQLEXPRESS01;Integrated Security=true;";
         public void EnrollStudent(EnrollStudentRequest request)
         {
             //
@@ -19,7 +20,7 @@ namespace WebApplication1.Services
             //4. Check if index does not exists -> INSERT/400
             //5. return Enrollment model
 
-            using (var con = new SqlConnection(@"Server=localhost\SQLEXPRESS01;Integrated Security=true;"))
+            using (var con = new SqlConnection(connectionString))
             using (var com = new SqlCommand())
             {
 
@@ -29,33 +30,44 @@ namespace WebApplication1.Services
 
                 con.Open();
                 var tran = con.BeginTransaction();
+                com.Transaction = tran;
 
                 //2. EXECUTE THE 1 statement
                 var dr = com.ExecuteReader();
                 if (!dr.Read())
                 {
+                    dr.Close();
                     tran.Rollback(); ///...
                     //ERROR - 404 - Studies does not exists
                     throw new HttpException(404, "Studies does not exists");
                 }
-                int idStudies = (int)dr["IdStudies"];
+                int idStudies = (int)dr["IdStudy"];
+                dr.Close();
 
                 //3.
-                com.CommandText = "SELECT * FROM Enrollment WHERE Semester=1 AND IdStudies=@IdStud";
+                com.CommandText = "SELECT * FROM Enrollment WHERE Semester=1 AND IdStudy=@IdStud";
                 com.Parameters.AddWithValue("IdStud", idStudies);
                 dr = com.ExecuteReader();
+
+                int idEnrollment = 1;
+
                 if (!dr.Read())
                 {
-                    tran.Rollback(); ///...
-                    //ERROR - 404 - Enrollment does not exists
-                    //throw new HttpException(404, "Enrollment does not exists");
-                    com.CommandText = "select MAX(IdEnrollment) from Enrollment";
+                    dr.Close();
+
+                    com.CommandText = "select MAX(IdEnrollment) as IdEnrollment from Enrollment";
                     var dr1 = com.ExecuteReader();
-                    int lastID = 1;
-                    if (dr.Read())
-                       lastID = (int)dr["IdEnrollment"];
+                    if (dr1.Read())
+                        idEnrollment = (int)dr1["IdEnrollment"] + 1;
+                    dr1.Close();
 
                     com.CommandText = "insert into Enrollment values (@IdEnrollment, 2, 1, CONVERT(varchar, '2019-10-10', 23));";
+                    com.Parameters.AddWithValue("IdEnrollment", idEnrollment);
+                    com.ExecuteNonQuery();
+                }
+                else
+                {
+                    dr.Close();
                 }
                 //...
 
@@ -68,12 +80,12 @@ namespace WebApplication1.Services
                 com.Parameters.AddWithValue("FistName", request.FirstName);
                 //...
                 */
-                com.CommandText = "insert into Student values (@IndexNumber, @name, @surname, CONVERT(varchar, @birthDate, 23), @studies);";
-                com.Parameters.AddWithValue("IndexNumber", request.IndexNumber);
-                com.Parameters.AddWithValue("name", request.FirstName);
-                com.Parameters.AddWithValue("surname", request.LastName);
-                com.Parameters.AddWithValue("birthDate", request.Birthdate);
-                com.Parameters.AddWithValue("studies", request.Studies);
+                com.CommandText = "insert into Student values (@studentIndexNumber, @studentName, @studentSurname, CONVERT(varchar, @studentBirthDate, 23), @studentStudies);";
+                com.Parameters.AddWithValue("studentIndexNumber", request.IndexNumber);
+                com.Parameters.AddWithValue("studentName", request.FirstName);
+                com.Parameters.AddWithValue("studentSurname", request.LastName);
+                com.Parameters.AddWithValue("studentBirthDate", request.Birthdate);
+                com.Parameters.AddWithValue("studentStudies", idEnrollment);
 
                 com.ExecuteNonQuery();
 
@@ -87,7 +99,39 @@ namespace WebApplication1.Services
 
         public void PromoteStudents(int semester, string studies)
         {
-            
+            // 1. Check if Enrollment table contains provided Studies and Semester. Otherwise return 404(Not Found)
+
+            using (var con = new SqlConnection(connectionString))
+            using (var com = new SqlCommand())
+            {
+                // 1.
+                com.CommandText = "SELECT * FROM Enrollment WHERE Semester = @semester AND IdStudy = (select s.IdStudy from Studies s where s.name = @studies)";
+                com.Parameters.AddWithValue("semester", semester);
+                com.Parameters.AddWithValue("studies", studies);
+
+                com.Connection = con;
+
+                con.Open();
+
+                var tran = con.BeginTransaction();
+                com.Transaction = tran;
+
+                // 1. execute first statement
+                var dr = com.ExecuteReader();
+                if (!dr.Read())
+                {
+                    dr.Close();
+                    tran.Rollback();
+                    throw new HttpException(404, "Enrollment with thease parameters not found");
+                }
+                int idStudies = (int)dr["IdStudy"];
+                dr.Close();
+
+
+                tran.Commit(); //make all the changes in db visible to another users
+
+                ///tran.Rollback();
+            }
         }
     }
 }
